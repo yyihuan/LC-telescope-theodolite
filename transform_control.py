@@ -7,20 +7,26 @@ import numpy as np
 from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord, AltAz
 from astropy.time import Time
+# from gyroscope_adapter import GyroscopeBase, VirtualGyroscope, RealGyroscope
+from gyroscope import Gyroscope
+from typing import Optional
 
 
 class TelescopeController:
-    def __init__(self, port='/dev/tty.usbmodem1201', baudrate=115200, gyro=None, simulation=False, hybrid_sim=False):
+    def __init__(self, port='/dev/tty.usbmodem1201', baudrate=115200, gyro: Gyroscope = None, simulation=False, hybrid_sim=False):
         """
         初始化望远镜控制器
         
         :param port: 串口设备名
         :param baudrate: 波特率
-        :param gyro: 陀螺仪对象，提供姿态数据
+        :param gyro: 陀螺仪对象，如果为None且非仿真模式则报错
         :param simulation: 完全仿真模式（不连接真实串口，使用虚拟陀螺仪）
         :param hybrid_sim: 半实物仿真模式（连接真实串口，使用虚拟陀螺仪）
         """
-        self.gyro = gyro if gyro is not None else None
+        # 初始化陀螺仪
+        self.gyro = gyro
+        logging.info("使用外部提供的陀螺仪")
+
         self.simulation = simulation
         self.hybrid_sim = hybrid_sim
         
@@ -42,9 +48,6 @@ class TelescopeController:
                 else:
                     logging.error("半实物仿真模式下串口连接失败，无法继续")
                     raise
-                
-        self.target_azimuth = 0.0
-        self.target_altitude = 20.0
         
         # 记录运行模式
         mode = "完全仿真" if simulation else ("半实物仿真" if hybrid_sim else "正常")
@@ -134,13 +137,13 @@ class TelescopeController:
                 return 1
                 
             current_az, current_alt = self.gyro.get_current_attitude()
+            print(f"当前角度: ({current_az:.2f}°, {current_alt:.2f}°)")
             
             # 计算方位角和高度角的控制信号
             az_cw, az_ccw = self._calculate_azimuth_control(current_az)
             alt_up, alt_down = self._calculate_altitude_control(current_alt)
 
             # 打印当前状态
-            print(f"当前角度: ({current_az:.2f}°, {current_alt:.2f}°)")
             print(f"目标角度: ({self.target_azimuth:.2f}°, {self.target_altitude:.2f}°)")
             
             # 检查是否到达目标
@@ -224,7 +227,22 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, 
                         format='%(asctime)s - %(levelname)s - %(message)s')
     
+    # 使用示例：完全仿真模式
     controller = TelescopeController(simulation=True)
+    
+    # 使用示例：真实模式
+    # real_gyro = RealGyroscope(port='/dev/tty.usbserial-1120')
+    # controller = TelescopeController(
+    #     port='/dev/tty.usbmodem1201',  # 控制器串口
+    #     gyro=real_gyro                  # 真实陀螺仪对象
+    # )
+    
+    # 使用示例：半实物仿真模式
+    # controller = TelescopeController(
+    #     port='/dev/tty.usbmodem1201',
+    #     hybrid_sim=True
+    # )
+    
     current_time = datetime.now()
     
     # 使用赤道坐标设置目标
