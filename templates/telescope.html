@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>望远镜控制面板</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .control-panel, .status-panel {
+            flex: 1;
+            min-width: 300px;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button.stop {
+            background-color: #f44336;
+        }
+        .coordinate-inputs {
+            margin-top: 15px;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+        }
+        .status-value {
+            font-weight: bold;
+        }
+        .hidden {
+            display: none;
+        }
+        #message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+    </style>
+</head>
+<body>
+    <h1>望远镜控制面板</h1>
+    
+    <div class="container">
+        <div class="control-panel">
+            <h2>控制参数</h2>
+            <form id="telescope-form">
+                <div class="form-group">
+                    <label for="mode">运行模式：</label>
+                    <select id="mode" name="mode">
+                        <option value="simulation">纯模拟模式</option>
+                        <option value="hybrid">半实物仿真模式</option>
+                        <option value="real">真实模式</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="port">串口选择：</label>
+                    <select id="port" name="port">
+                        <option value="">-- 请选择串口 --</option>
+                        {% for port in serial_ports %}
+                        <option value="{{ port }}">{{ port }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="lat">当前纬度 (度)：</label>
+                    <input type="number" id="lat" name="lat" step="0.0001" value="40.011">
+                </div>
+                
+                <div class="form-group">
+                    <label for="lon">当前经度 (度)：</label>
+                    <input type="number" id="lon" name="lon" step="0.0001" value="116.392">
+                </div>
+                
+                <div class="form-group">
+                    <label>坐标类型：</label>
+                    <div>
+                        <input type="radio" id="equatorial" name="coordinate_type" value="equatorial" checked>
+                        <label for="equatorial" style="display:inline;">赤道坐标</label>
+                        
+                        <input type="radio" id="horizontal" name="coordinate_type" value="horizontal" style="width:auto;margin-left:15px;">
+                        <label for="horizontal" style="display:inline;">地平坐标</label>
+                    </div>
+                </div>
+                
+                <div id="equatorial-inputs" class="coordinate-inputs">
+                    <div class="form-group">
+                        <label for="ra">赤经 (小时)：</label>
+                        <input type="number" id="ra" name="ra" step="0.01" min="0" max="24" value="6">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dec">赤纬 (度)：</label>
+                        <input type="number" id="dec" name="dec" step="0.01" min="-90" max="90" value="45">
+                    </div>
+                </div>
+                
+                <div id="horizontal-inputs" class="coordinate-inputs hidden">
+                    <div class="form-group">
+                        <label for="az">方位角 (度)：</label>
+                        <input type="number" id="az" name="az" step="0.01" min="0" max="360" value="180">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="alt">高度角 (度)：</label>
+                        <input type="number" id="alt" name="alt" step="0.01" min="20" max="90" value="45">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <button type="button" id="start-btn">启动望远镜</button>
+                    <button type="button" id="stop-btn" class="stop">停止望远镜</button>
+                </div>
+                
+                <div id="message" class="hidden"></div>
+            </form>
+        </div>
+        
+        <div class="status-panel">
+            <h2>望远镜状态</h2>
+            
+            <div class="form-group">
+                <label>当前时间：</label>
+                <div id="current-time" class="status-value">--</div>
+            </div>
+            
+            <div class="form-group">
+                <label>当前方位角 (度)：</label>
+                <div id="current-az" class="status-value">0.00</div>
+            </div>
+            
+            <div class="form-group">
+                <label>当前高度角 (度)：</label>
+                <div id="current-alt" class="status-value">0.00</div>
+            </div>
+            
+            <div class="form-group">
+                <label>目标方位角 (度)：</label>
+                <div id="target-az" class="status-value">0.00</div>
+            </div>
+            
+            <div class="form-group">
+                <label>目标高度角 (度)：</label>
+                <div id="target-alt" class="status-value">0.00</div>
+            </div>
+            
+            <div class="form-group">
+                <label>系统状态：</label>
+                <div id="status" class="status-value">就绪</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 切换坐标输入类型
+            const equatorialRadio = document.getElementById('equatorial');
+            const horizontalRadio = document.getElementById('horizontal');
+            const equatorialInputs = document.getElementById('equatorial-inputs');
+            const horizontalInputs = document.getElementById('horizontal-inputs');
+            
+            equatorialRadio.addEventListener('change', function() {
+                equatorialInputs.classList.remove('hidden');
+                horizontalInputs.classList.add('hidden');
+            });
+            
+            horizontalRadio.addEventListener('change', function() {
+                horizontalInputs.classList.remove('hidden');
+                equatorialInputs.classList.add('hidden');
+            });
+            
+            // 获取运行模式选择控件
+            const modeSelect = document.getElementById('mode');
+            const portSelect = document.getElementById('port');
+            
+            // 根据模式显示或隐藏串口选择
+            modeSelect.addEventListener('change', function() {
+                if (modeSelect.value === 'simulation') {
+                    portSelect.parentElement.style.display = 'none';
+                } else {
+                    portSelect.parentElement.style.display = 'block';
+                }
+            });
+            
+            // 启动望远镜
+            document.getElementById('start-btn').addEventListener('click', function() {
+                const form = document.getElementById('telescope-form');
+                const formData = new FormData(form);
+                
+                const messageDiv = document.getElementById('message');
+                
+                // 检查串口选择
+                if ((formData.get('mode') === 'real' || formData.get('mode') === 'hybrid') && !formData.get('port')) {
+                    messageDiv.textContent = '请选择串口';
+                    messageDiv.className = 'error';
+                    messageDiv.classList.remove('hidden');
+                    return;
+                }
+                
+                fetch('/start', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    messageDiv.textContent = data.message;
+                    messageDiv.className = data.success ? 'success' : 'error';
+                    messageDiv.classList.remove('hidden');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    messageDiv.textContent = '发生错误: ' + error;
+                    messageDiv.className = 'error';
+                    messageDiv.classList.remove('hidden');
+                });
+            });
+            
+            // 停止望远镜
+            document.getElementById('stop-btn').addEventListener('click', function() {
+                fetch('/stop', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const messageDiv = document.getElementById('message');
+                    messageDiv.textContent = data.message;
+                    messageDiv.className = data.success ? 'success' : 'error';
+                    messageDiv.classList.remove('hidden');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    const messageDiv = document.getElementById('message');
+                    messageDiv.textContent = '发生错误: ' + error;
+                    messageDiv.className = 'error';
+                    messageDiv.classList.remove('hidden');
+                });
+            });
+            
+            // 定期更新状态
+            function updateStatus() {
+                fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('current-time').textContent = data.current_time;
+                    document.getElementById('current-az').textContent = data.current_az;
+                    document.getElementById('current-alt').textContent = data.current_alt;
+                    document.getElementById('target-az').textContent = data.target_az;
+                    document.getElementById('target-alt').textContent = data.target_alt;
+                    document.getElementById('status').textContent = data.status;
+                })
+                .catch(error => console.error('Error:', error));
+            }
+            
+            // 每秒更新一次状态
+            setInterval(updateStatus, 1000);
+            updateStatus(); // 立即更新一次
+            
+            // 初始状态
+            if (modeSelect.value === 'simulation') {
+                portSelect.parentElement.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html> 
