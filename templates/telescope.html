@@ -94,10 +94,20 @@
                     </select>
                 </div>
                 
-                <div class="form-group">
+                <div class="form-group port-selection hidden">
                     <label for="port">串口选择：</label>
                     <select id="port" name="port">
                         <option value="">-- 请选择串口 --</option>
+                        {% for port in serial_ports %}
+                        <option value="{{ port }}">{{ port }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group gyro-port-selection hidden">
+                    <label for="gyro_port">陀螺仪串口：</label>
+                    <select id="gyro_port" name="gyro_port">
+                        <option value="">-- 请选择陀螺仪串口 --</option>
                         {% for port in serial_ports %}
                         <option value="{{ port }}">{{ port }}</option>
                         {% endfor %}
@@ -214,13 +224,19 @@
             // 获取运行模式选择控件
             const modeSelect = document.getElementById('mode');
             const portSelect = document.getElementById('port');
+            const gyroPortSelect = document.getElementById('gyro_port');
             
             // 根据模式显示或隐藏串口选择
             modeSelect.addEventListener('change', function() {
                 if (modeSelect.value === 'simulation') {
                     portSelect.parentElement.style.display = 'none';
+                    gyroPortSelect.parentElement.style.display = 'none';
+                } else if (modeSelect.value === 'hybrid') {
+                    portSelect.parentElement.style.display = 'block';
+                    gyroPortSelect.parentElement.style.display = 'none';
                 } else {
                     portSelect.parentElement.style.display = 'block';
+                    gyroPortSelect.parentElement.style.display = 'block';
                 }
             });
             
@@ -232,7 +248,7 @@
                 const messageDiv = document.getElementById('message');
                 
                 // 检查串口选择
-                if ((formData.get('mode') === 'real' || formData.get('mode') === 'hybrid') && !formData.get('port')) {
+                if ((modeSelect.value === 'real' || modeSelect.value === 'hybrid') && !formData.get('port')) {
                     messageDiv.textContent = '请选择串口';
                     messageDiv.className = 'error';
                     messageDiv.classList.remove('hidden');
@@ -300,6 +316,7 @@
             // 初始状态
             if (modeSelect.value === 'simulation') {
                 portSelect.parentElement.style.display = 'none';
+                gyroPortSelect.parentElement.style.display = 'none';
             }
         });
     </script>

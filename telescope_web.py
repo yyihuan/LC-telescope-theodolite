@@ -6,6 +6,7 @@ from datetime import datetime
 import logging
 import sys
 import os
+from gyroscope import VirtualGyroscope, RealGyroscope
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, 
@@ -15,7 +16,6 @@ logging.basicConfig(level=logging.INFO,
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 try:
     from transform_control import TelescopeController
-    from virtual_device_test import VirtualGyro
     logging.info("成功导入望远镜控制模块")
 except Exception as e:
     logging.error(f"导入望远镜控制模块失败: {e}")
@@ -107,28 +107,37 @@ def start_telescope():
     # 获取表单数据
     try:
         mode = request.form.get('mode')
-        port = request.form.get('port')
+        control_port = request.form.get('control_port')  # 改名以区分两个串口
+        gyro_port = request.form.get('gyro_port')       # 新增陀螺仪串口
         coordinate_type = request.form.get('coordinate_type')
         
-        logging.info(f"启动参数 - 模式: {mode}, 串口: {port}, 坐标类型: {coordinate_type}")
+        logging.info(f"启动参数 - 模式: {mode}, 控制器串口: {control_port}, 陀螺仪串口: {gyro_port}, 坐标类型: {coordinate_type}")
         
-        # 创建虚拟陀螺仪（在模拟和半实物模式下使用）
+        # 创建陀螺仪
         gyro = None
         if mode == 'simulation' or mode == 'hybrid':
-            gyro = VirtualGyro()
+            gyro = VirtualGyroscope()
             logging.info("已创建虚拟陀螺仪")
-        
+        elif mode == 'real':
+            if not gyro_port:
+                return jsonify({"success": False, "message": "请选择陀螺仪串口"})
+            try:
+                gyro = RealGyroscope(port=gyro_port)
+                logging.info(f"已创建真实陀螺仪，使用串口 {gyro_port}")
+            except Exception as e:
+                return jsonify({"success": False, "message": f"连接陀螺仪失败: {str(e)}"})
+
         # 创建望远镜控制器
         simulation = (mode == 'simulation')
         hybrid_sim = (mode == 'hybrid')
         
         if mode == 'real' or mode == 'hybrid':
-            if not port:
-                return jsonify({"success": False, "message": "请选择串口"})
+            if not control_port:
+                return jsonify({"success": False, "message": "请选择控制器串口"})
             
-            logging.info(f"创建望远镜控制器 - 串口: {port}, 模拟: {simulation}, 半实物: {hybrid_sim}")
+            logging.info(f"创建望远镜控制器 - 串口: {control_port}")
             telescope = TelescopeController(
-                port=port,
+                port=control_port,
                 baudrate=115200,
                 gyro=gyro,
                 simulation=simulation,

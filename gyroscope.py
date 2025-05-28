@@ -1,10 +1,61 @@
+from abc import ABC, abstractmethod
 import time
 from pymodbus.client import ModbusSerialClient
 from typing import Tuple, Optional
+import numpy as np
 
-class Gyroscope:
+class GyroscopeBase(ABC):
+    """陀螺仪基类，定义统一接口"""
+    
+    @abstractmethod
+    def get_current_attitude(self) -> Tuple[float, float]:
+        """获取当前姿态
+        Returns:
+            Tuple[float, float]: (方位角, 高度角) 单位：度
+        """
+        pass
+        
+    @abstractmethod
+    def process_command(self, cmd: str) -> None:
+        """处理控制命令（仅在仿真模式下需要实现）
+        Args:
+            cmd: 控制命令字符串
+        """
+        pass
+
+class VirtualGyroscope(GyroscopeBase):
+    """虚拟陀螺仪实现"""
+    def __init__(self):
+        self.current_az = 0.0
+        self.current_alt = 20.0
+        self.last_update = time.time()
+        
+    def get_current_attitude(self) -> Tuple[float, float]:
+        return self.current_az, self.current_alt
+        
+    def process_command(self, cmd: str) -> None:
+        """处理控制命令，更新虚拟陀螺仪状态"""
+        current_time = time.time()
+        dt = current_time - self.last_update
+        self.last_update = current_time
+        
+        # 模拟运动速度（度/秒）
+        speed = 10.0
+        
+        if "AZ1" in cmd:  # 顺时针
+            self.current_az = (self.current_az + speed * dt) % 360
+        elif "AZ2" in cmd:  # 逆时针
+            self.current_az = (self.current_az - speed * dt) % 360
+            
+        if "EL1" in cmd:  # 升高
+            self.current_alt = min(90.0, self.current_alt + speed * dt)
+        elif "EL2" in cmd:  # 降低
+            self.current_alt = max(20.0, self.current_alt - speed * dt)
+
+class RealGyroscope(GyroscopeBase):
+    """真实陀螺仪实现"""
     def __init__(self, 
-                 port: str ,
+                 port: str,
                  baudrate: int = 4800,
                  parity: str = 'N',
                  stopbits: int = 1,
@@ -30,7 +81,6 @@ class Gyroscope:
         )
         
         if not self.client.connect():
-            print(self.client.connect())
             raise ConnectionError("无法连接到陀螺仪设备")
 
     def read_angles(self) -> Tuple[float, float, float]:
@@ -51,9 +101,6 @@ class Gyroscope:
                 raise Exception("读取角度数据失败")
                 
             # 将数据转换为实际角度值（除以10，因为数据被放大了10倍）
-            # 假设寄存器中的值为16位有符号整数，数值被放大了10倍。
-            # 大于32767的值被视为负数（按二进制补码表示）。
-            
             raw_x = response.registers[0]
             signed_x = raw_x - 65536 if raw_x > 32767 else raw_x
             x_angle = signed_x / 10.0
@@ -121,6 +168,21 @@ class Gyroscope:
         except Exception as e:
             print(f"Z轴校准时发生错误: {str(e)}")
             return False
+            
+    def get_current_attitude(self) -> Tuple[float, float]:
+        """获取真实陀螺仪数据
+        Returns:
+            Tuple[float, float]: (方位角, 高度角) 单位：度
+        """
+        x, y, z = self.read_angles()
+        # 根据实际陀螺仪的安装方式，可能需要调整角度的映射关系
+        azimuth = z % 360  # 假设z轴对应方位角
+        altitude = y       # 假设y轴对应高度角
+        return azimuth, altitude
+        
+    def process_command(self, cmd: str) -> None:
+        """真实陀螺仪不需要处理命令"""
+        pass
 
     def __del__(self):
         """析构函数，确保关闭串口连接"""
@@ -131,26 +193,13 @@ class Gyroscope:
 if __name__ == "__main__":
     try:
         # 创建陀螺仪实例（使用默认参数）
-        gyro = Gyroscope(port='/dev/tty.usbserial-1120')
+        gyro = RealGyroscope(port='/dev/tty.usbserial-1120')
         
-        # 执行校准
-        # print("开始XY轴校准...")
-        # if gyro.calibrate_xy():
-        #     print("XY轴校准成功")
-        # else:
-        #     print("XY轴校准失败")
-            
-        # print("开始Z轴校准...")
-        # if gyro.calibrate_z():
-        #     print("Z轴校准成功")
-        # else:
-        #     print("Z轴校准失败")
-            
         # 读取角度值
         print("\n开始读取角度值...")
         for i in range(100):
-            x, y, z = gyro.read_angles()
-            print(f"当前角度 - X: {x:.2f}°  Y: {y:.2f}°  Z: {z:.2f}°")
+            azimuth, altitude = gyro.get_current_attitude()
+            print(f"当前角度 - 方位角: {azimuth:.2f}° 高度角: {altitude:.2f}°")
             time.sleep(1)
             
     except Exception as e:
